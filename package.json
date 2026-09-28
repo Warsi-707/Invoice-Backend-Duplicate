@@ -1,0 +1,22 @@
+{
+  "name": "invoice-manager-backend",
+  "version": "1.0.0",
+  "description": "Node.js Express Backend with PostgreSQL / Neon DB for Invoice Manager",
+  "main": "server.js",
+  "type": "module",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch --watch-exclude=whatsapp_session server.js"
+  },
+  "dependencies": {
+    "@whiskeysockets/baileys": "^7.0.0-rc14",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2",
+    "morgan": "^1.10.0",
+    "pg": "^8.13.1",
+    "pino": "^10.3.1",
+    "puppeteer-core": "^25.11.0",
+    "qrcode": "^1.5.4"
+  }
+}
