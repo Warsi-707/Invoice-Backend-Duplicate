@@ -49,34 +49,39 @@ app.use((err, req, res, next) => {
   });
 });
 
+// Export app for Vercel serverless
+export default app;
+
 import { warmUpPdfEngine } from './services/pdfService.js';
 import { initWhatsApp } from './services/whatsappService.js';
 import { processDueSubscriptions } from './services/subscriptionService.js';
 
-// Start Server
-async function startServer() {
-  try {
-    await initDb();
-    app.listen(PORT, () => {
-      console.log(`🚀 Invoice Manager Backend running at http://localhost:${PORT}`);
-      // Pre-warm browser and WhatsApp in background for 0-delay instant performance
-      warmUpPdfEngine();
-      initWhatsApp().catch(() => {});
+// Start Server — only runs locally, NOT on Vercel serverless
+if (process.env.VERCEL !== '1') {
+  async function startServer() {
+    try {
+      await initDb();
+      app.listen(PORT, () => {
+        console.log(`🚀 Invoice Manager Backend running at http://localhost:${PORT}`);
+        // Pre-warm browser and WhatsApp in background for 0-delay instant performance
+        warmUpPdfEngine();
+        initWhatsApp().catch(() => {});
 
-      // Check and process due recurring subscriptions
-      setTimeout(() => {
-        processDueSubscriptions().catch(() => {});
-      }, 5000);
+        // Check and process due recurring subscriptions
+        setTimeout(() => {
+          processDueSubscriptions().catch(() => {});
+        }, 5000);
 
-      // Run recurring subscription check every 2 minutes for real-time responsiveness
-      setInterval(() => {
-        processDueSubscriptions().catch(() => {});
-      }, 2 * 60 * 1000);
-    });
-  } catch (err) {
-    console.error('❌ Failed to start server:', err.message);
-    process.exit(1);
+        // Run recurring subscription check every 2 minutes for real-time responsiveness
+        setInterval(() => {
+          processDueSubscriptions().catch(() => {});
+        }, 2 * 60 * 1000);
+      });
+    } catch (err) {
+      console.error('❌ Failed to start server:', err.message);
+      process.exit(1);
+    }
   }
-}
 
-startServer();
+  startServer();
+}
