@@ -6,7 +6,7 @@
   "type": "module",
   "scripts": {
     "start": "node server.js",
-    "dev": "node --watch --watch-exclude=whatsapp_session server.js"
+    "dev": "node --watch server.js"
   },
   "dependencies": {
     "@whiskeysockets/baileys": "^7.0.0-rc14",

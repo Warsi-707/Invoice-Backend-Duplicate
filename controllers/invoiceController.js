@@ -1,5 +1,5 @@
 import { query } from '../config/db.js';
-import { memoryCache, CacheKeys, invalidateInvoiceCaches } from '../services/cacheService.js';
+import { memoryCache, CacheKeys, invalidateInvoiceCaches, invalidateClientCaches } from '../services/cacheService.js';
 
 function mapInvoice(row) {
   return {
@@ -22,6 +22,8 @@ function mapInvoice(row) {
     status: row.status,
     items: row.items || [],
     payments: row.payments || [],
+    milestoneId: row.milestone_id || null,
+    projectId: row.project_id || null,
     createdAt: row.created_at
   };
 }
@@ -56,22 +58,38 @@ export const invoiceController = {
         discount = 0,
         lateFee = 0,
         total,
-        items = []
+        items = [],
+        milestoneId = null,
+        projectId = null
       } = req.body;
 
       if (!businessId || !customerId || total === undefined) {
         return res.status(400).json({ message: 'businessId, customerId and total are required.' });
       }
 
-      // Check for duplicate invoice (same business, customer, month, year)
-      const dupCheck = await query(
-        `SELECT id FROM invoices
-         WHERE business_id = $1 AND customer_id = $2 AND month = $3 AND year = $4 LIMIT 1`,
-        [businessId, customerId, month, parseInt(year, 10)]
-      );
+      // Check for duplicate invoice
+      if (milestoneId) {
+        const dupCheck = await query(
+          `SELECT id, invoice_no FROM invoices WHERE milestone_id = $1 LIMIT 1`,
+          [milestoneId]
+        );
+        if (dupCheck.rows.length > 0) {
+          return res.status(409).json({
+            duplicate: true,
+            message: `Invoice (${dupCheck.rows[0].invoice_no}) already generated for this milestone.`
+          });
+        }
+      } else {
+        // Check for duplicate invoice (same business, customer, month, year)
+        const dupCheck = await query(
+          `SELECT id FROM invoices
+           WHERE business_id = $1 AND customer_id = $2 AND month = $3 AND year = $4 LIMIT 1`,
+          [businessId, customerId, month, parseInt(year, 10)]
+        );
 
-      if (dupCheck.rows.length > 0) {
-        return res.status(409).json({ duplicate: true, message: 'Invoice already exists for this client and month.' });
+        if (dupCheck.rows.length > 0) {
+          return res.status(409).json({ duplicate: true, message: 'Invoice already exists for this client and month.' });
+        }
       }
 
       // Generate invoice number
@@ -87,8 +105,8 @@ export const invoiceController = {
       const insertRes = await query(
         `INSERT INTO invoices (
           id, invoice_no, business_id, customer_id, month, year, date, due_date,
-          subtotal, previous_dues, previous_dues_months, discount, late_fee, total, paid, balance, status, items, payments
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
+          subtotal, previous_dues, previous_dues_months, discount, late_fee, total, paid, balance, status, items, payments, milestone_id, project_id
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21)
         RETURNING *`,
         [
           id,
@@ -109,9 +127,50 @@ export const invoiceController = {
           numTotal,
           'Unpaid',
           JSON.stringify(items || []),
-          JSON.stringify([])
+          JSON.stringify([]),
+          milestoneId,
+          projectId
         ]
       );
+
+      // If this was a milestone invoice, update the milestone reference in customer's items
+      if (milestoneId) {
+        try {
+          const custRes = await query('SELECT items FROM customers WHERE id = $1', [customerId]);
+          if (custRes.rows.length > 0) {
+            let custItems = custRes.rows[0].items || [];
+            let modified = false;
+            custItems = custItems.map((it) => {
+              if (Array.isArray(it.milestones)) {
+                const updatedMs = it.milestones.map((ms) => {
+                  if (String(ms.id) === String(milestoneId)) {
+                    modified = true;
+                    return {
+                      ...ms,
+                      invoiceId: id,
+                      invoiceNo: invoiceNo,
+                      status: 'Invoiced'
+                    };
+                  }
+                  return ms;
+                });
+                return { ...it, milestones: updatedMs };
+              }
+              return it;
+            });
+
+            if (modified) {
+              await query(
+                'UPDATE customers SET items = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2',
+                [JSON.stringify(custItems), customerId]
+              );
+              invalidateClientCaches();
+            }
+          }
+        } catch (mErr) {
+          console.error('Error updating customer milestone record:', mErr);
+        }
+      }
 
       invalidateInvoiceCaches();
 
@@ -330,6 +389,45 @@ export const invoiceController = {
   deleteInvoice: async (req, res, next) => {
     try {
       const { id } = req.params;
+      const invRes = await query('SELECT customer_id, milestone_id FROM invoices WHERE id = $1', [id]);
+      if (invRes.rows.length > 0 && invRes.rows[0].milestone_id) {
+        const { customer_id: customerId, milestone_id: milestoneId } = invRes.rows[0];
+        try {
+          const custRes = await query('SELECT items FROM customers WHERE id = $1', [customerId]);
+          if (custRes.rows.length > 0) {
+            let custItems = custRes.rows[0].items || [];
+            let modified = false;
+            custItems = custItems.map((it) => {
+              if (Array.isArray(it.milestones)) {
+                const updatedMs = it.milestones.map((ms) => {
+                  if (String(ms.id) === String(milestoneId)) {
+                    modified = true;
+                    return {
+                      ...ms,
+                      invoiceId: null,
+                      invoiceNo: null,
+                      status: 'Ready to Invoice'
+                    };
+                  }
+                  return ms;
+                });
+                return { ...it, milestones: updatedMs };
+              }
+              return it;
+            });
+            if (modified) {
+              await query(
+                'UPDATE customers SET items = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2',
+                [JSON.stringify(custItems), customerId]
+              );
+              invalidateClientCaches();
+            }
+          }
+        } catch (e) {
+          console.error('Error resetting milestone on invoice delete:', e);
+        }
+      }
+
       await query('DELETE FROM invoices WHERE id = $1', [id]);
       invalidateInvoiceCaches();
       res.json({ success: true, id });

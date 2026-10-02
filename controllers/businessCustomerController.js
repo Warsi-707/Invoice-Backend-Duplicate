@@ -1,5 +1,7 @@
 import { query } from '../config/db.js';
 import { memoryCache, CacheKeys, invalidateClientCaches } from '../services/cacheService.js';
+import { processDueSubscriptions } from '../services/subscriptionService.js';
+import { autoProcessProjectBilling } from '../services/projectInvoiceService.js';
 
 export const businessCustomerController = {
   getBusinesses: async (req, res, next) => {
@@ -7,7 +9,7 @@ export const businessCustomerController = {
       const cached = memoryCache.get(CacheKeys.BUSINESSES);
       if (cached) return res.json(cached);
 
-      const result = await query('SELECT * FROM businesses ORDER BY created_at ASC');
+      const result = await query('SELECT * FROM businesses ORDER BY created_at DESC');
       const businesses = result.rows.map(b => ({
         id: b.id,
         name: b.name,
@@ -30,7 +32,7 @@ export const businessCustomerController = {
       const cached = memoryCache.get(CacheKeys.CUSTOMERS);
       if (cached) return res.json(cached);
 
-      const result = await query('SELECT * FROM customers ORDER BY created_at ASC');
+      const result = await query('SELECT * FROM customers ORDER BY created_at DESC');
       const customers = result.rows.map(c => ({
         id: c.id,
         businessId: c.business_id,
@@ -128,6 +130,18 @@ export const businessCustomerController = {
       });
 
       invalidateClientCaches();
+
+      // If customer has subscription items, immediately check and trigger due reminders/invoices
+      const hasSubscription = (items || []).some(it => it.billingType === 'subscription');
+      if (hasSubscription) {
+        processDueSubscriptions().catch(e => console.warn('Background subscription check notice:', e.message));
+      }
+
+      // If customer has project items, auto-generate invoice & notifications just like subscription
+      const hasProject = (items || []).some(it => it.billingType !== 'subscription');
+      if (hasProject) {
+        autoProcessProjectBilling(customer, business).catch(e => console.warn('Auto project billing notice:', e.message));
+      }
     } catch (err) {
       next(err);
     }
@@ -195,6 +209,18 @@ export const businessCustomerController = {
       });
 
       invalidateClientCaches();
+
+      // If customer has subscription items, immediately check and trigger due reminders/invoices
+      const hasSubscription = (items || []).some(it => it.billingType === 'subscription');
+      if (hasSubscription) {
+        processDueSubscriptions().catch(e => console.warn('Background subscription check notice:', e.message));
+      }
+
+      // If customer has project items, auto-generate invoice & notifications just like subscription
+      const hasProject = (items || []).some(it => it.billingType !== 'subscription');
+      if (hasProject) {
+        autoProcessProjectBilling(updateCust.rows[0], updateBiz.rows[0]).catch(e => console.warn('Auto project billing notice:', e.message));
+      }
     } catch (err) {
       next(err);
     }

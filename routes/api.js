@@ -4,10 +4,12 @@ import { businessCustomerController } from '../controllers/businessCustomerContr
 import { invoiceController } from '../controllers/invoiceController.js';
 import { reversalController } from '../controllers/reversalController.js';
 import { reportController } from '../controllers/reportController.js';
+import { subscriptionController } from '../controllers/subscriptionController.js';
 import { settingsController } from '../controllers/settingsController.js';
 import { bootstrapController } from '../controllers/bootstrapController.js';
 import { whatsappController } from '../controllers/whatsappController.js';
 import { pdfController } from '../controllers/pdfController.js';
+import { notificationController } from '../controllers/notificationController.js';
 import { authenticateToken } from '../middleware/authMiddleware.js';
 
 const router = express.Router();
@@ -58,6 +60,17 @@ router.delete('/invoices/:id', invoiceController.deleteInvoice);
 
 // Reversals
 router.get('/reversals', reversalController.getReversals);
+
+// Subscriptions
+router.get('/subscriptions', subscriptionController.getSubscriptionsSummary);
+router.post('/subscriptions/process', subscriptionController.processSubscriptions);
+
+// In-App Notifications
+router.get('/notifications', notificationController.getNotifications);
+router.post('/notifications/read-all', notificationController.markAllAsRead);
+router.post('/notifications/:id/read', notificationController.markAsRead);
+router.delete('/notifications', notificationController.clearAll);
+router.delete('/notifications/:id', notificationController.deleteNotification);
 
 // Reports
 router.get('/reports/summary', reportController.getSummary);

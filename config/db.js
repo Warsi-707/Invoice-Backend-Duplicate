@@ -46,6 +46,7 @@ export async function initDb() {
       ALTER TABLE settings ADD COLUMN IF NOT EXISTS password VARCHAR(255) DEFAULT 'admin123';
       ALTER TABLE settings ADD COLUMN IF NOT EXISTS proposal_data JSONB DEFAULT '{}'::jsonb;
       ALTER TABLE settings ADD COLUMN IF NOT EXISTS whatsapp_settings JSONB DEFAULT '{"initialDelay":2,"messageDelay":3}'::jsonb;
+      ALTER TABLE settings ADD COLUMN IF NOT EXISTS services JSONB DEFAULT '[]'::jsonb;
       UPDATE settings SET password = 'admin123' WHERE password IS NULL OR password = '';
 
       CREATE TABLE IF NOT EXISTS businesses (
@@ -98,6 +99,8 @@ export async function initDb() {
 
       ALTER TABLE invoices ADD COLUMN IF NOT EXISTS previous_dues NUMERIC(14, 2) DEFAULT 0;
       ALTER TABLE invoices ADD COLUMN IF NOT EXISTS previous_dues_months VARCHAR(255) DEFAULT '';
+      ALTER TABLE invoices ADD COLUMN IF NOT EXISTS milestone_id VARCHAR(100);
+      ALTER TABLE invoices ADD COLUMN IF NOT EXISTS project_id VARCHAR(100);
 
       CREATE TABLE IF NOT EXISTS reversals (
         id VARCHAR(50) PRIMARY KEY,
@@ -118,15 +121,36 @@ export async function initDb() {
         updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
       );
 
+      CREATE TABLE IF NOT EXISTS notifications (
+        id VARCHAR(50) PRIMARY KEY,
+        type VARCHAR(50) DEFAULT 'subscription_reminder',
+        title VARCHAR(255) NOT NULL,
+        message TEXT NOT NULL,
+        customer_id VARCHAR(50) REFERENCES customers(id) ON DELETE CASCADE,
+        customer_name VARCHAR(255) DEFAULT '',
+        business_id VARCHAR(50) REFERENCES businesses(id) ON DELETE CASCADE,
+        item_id VARCHAR(50) DEFAULT '',
+        item_name VARCHAR(255) DEFAULT '',
+        amount NUMERIC(14, 2) DEFAULT 0,
+        due_date VARCHAR(30) DEFAULT '',
+        cycle_key VARCHAR(50) DEFAULT '',
+        is_read BOOLEAN DEFAULT FALSE,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+      );
+
       -- High Performance Indexes for Instant Queries
       CREATE INDEX IF NOT EXISTS idx_invoices_biz ON invoices (business_id);
       CREATE INDEX IF NOT EXISTS idx_invoices_cust ON invoices (customer_id);
       CREATE INDEX IF NOT EXISTS idx_invoices_biz_cust ON invoices (business_id, customer_id);
       CREATE INDEX IF NOT EXISTS idx_invoices_created_at ON invoices (created_at DESC);
       CREATE INDEX IF NOT EXISTS idx_invoices_status ON invoices (status);
+      CREATE INDEX IF NOT EXISTS idx_invoices_milestone_id ON invoices (milestone_id);
       CREATE INDEX IF NOT EXISTS idx_customers_biz ON customers (business_id);
       CREATE INDEX IF NOT EXISTS idx_reversals_created ON reversals (created_at DESC);
       CREATE INDEX IF NOT EXISTS idx_reversals_invoice_id ON reversals (invoice_id);
+      CREATE INDEX IF NOT EXISTS idx_notifications_cust_cycle ON notifications (customer_id, cycle_key);
+      CREATE INDEX IF NOT EXISTS idx_notifications_created ON notifications (created_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_notifications_is_read ON notifications (is_read);
     `);
 
     // Ensure default settings row exists

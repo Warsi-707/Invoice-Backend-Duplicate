@@ -144,41 +144,61 @@ export async function generatePdfFromHtml(htmlContent) {
   const page = await getPage(browser);
 
   try {
+    await page.setViewport({ width: 840, height: 600, deviceScaleFactor: 2 });
     await page.setContent(htmlContent, { waitUntil: 'domcontentloaded' });
+    await page.emulateMediaType('print');
 
-    // Detect document type
+    // Detect document type and measure exact element size
     const docInfo = await page.evaluate(() => {
-      const isInvoice = !!document.querySelector('.invoice');
-      const invoiceEl = document.querySelector('.invoice');
-      const body = document.body;
-      const height = isInvoice && invoiceEl
-        ? Math.max(body.scrollHeight, invoiceEl.offsetHeight + 48, invoiceEl.scrollHeight + 48)
-        : body.scrollHeight;
-      return { isInvoice, height };
+      // .a4-page = Proposal, .proposal-* = legacy, anything else = Invoice/Statement
+      const isProposal = !!(
+        document.querySelector('.a4-page') ||
+        document.querySelector('.proposal-doc, .proposal-container, .proposal-root, .proposal')
+      );
+      const container = document.querySelector('.a4-page, .inv-container, .invoice, .statement') || document.body.firstElementChild || document.body;
+      
+      const rect = container.getBoundingClientRect();
+      const cardHeight = Math.ceil(Math.max(rect.height, container.scrollHeight, container.offsetHeight));
+      const cardWidth = Math.ceil(Math.max(rect.width, container.scrollWidth, 800));
+
+      if (isProposal) {
+        // Body has 24px top & bottom padding and margin: 0 auto.
+        // totalWidth = 840 gives exact 20px left margin & 20px right margin - 100% symmetric!
+        const scrollH = Math.max(document.documentElement.scrollHeight, document.body.scrollHeight, rect.bottom + 24);
+        const totalHeight = Math.ceil(scrollH) + 14;
+        const totalWidth = 840; // 800px card + 20px left + 20px right
+        return { isProposal, totalWidth, totalHeight, marginZero: true };
+      }
+
+      // Invoice / Statement framing
+      const topBottomMargin = 18;
+      const sideMargin = 8;
+      const totalHeight = cardHeight + (topBottomMargin * 2);
+      const totalWidth = cardWidth + (sideMargin * 2);
+      return { isProposal, totalWidth, totalHeight, marginZero: false, topBottomMargin, sideMargin };
     });
 
-    let pdfBuffer;
-    if (docInfo.isInvoice) {
-      // Auto-fit height for Invoices: Ends cleanly right after the signatures (Zero empty bottom page)
-      pdfBuffer = await page.pdf({
-        width: '720px',
-        height: `${Math.ceil(docInfo.height) + 8}px`,
-        printBackground: true,
-        preferCSSPageSize: false,
-        margin: { top: '0', right: '0', bottom: '0', left: '0' }
-      });
-    } else {
-      // Multi-page A4 format for Proposals & Reports
-      pdfBuffer = await page.pdf({
-        format: 'A4',
-        printBackground: true,
-        preferCSSPageSize: true,
-        margin: { top: '0', right: '0', bottom: '0', left: '0' }
-      });
-    }
+    const pdfBuffer = await page.pdf({
+      width: `${docInfo.totalWidth}px`,
+      height: `${docInfo.totalHeight}px`,
+      printBackground: true,
+      preferCSSPageSize: false,
+      margin: docInfo.marginZero ? {
+        top: '0px',
+        bottom: '0px',
+        left: '0px',
+        right: '0px'
+      } : {
+        top: `${docInfo.topBottomMargin}px`,
+        bottom: `${docInfo.topBottomMargin}px`,
+        left: `${docInfo.sideMargin}px`,
+        right: `${docInfo.sideMargin}px`
+      }
+    });
 
     return Buffer.from(pdfBuffer);
   } finally {
     page.close().catch(() => {});
   }
 }
+

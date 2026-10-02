@@ -12,8 +12,8 @@ export const bootstrapController = {
 
       const [settingsRes, businessesRes, customersRes, invoicesRes, reversalsRes] = await Promise.all([
         query('SELECT * FROM settings LIMIT 1'),
-        query('SELECT * FROM businesses ORDER BY created_at ASC'),
-        query('SELECT * FROM customers ORDER BY created_at ASC'),
+        query('SELECT * FROM businesses ORDER BY created_at DESC'),
+        query('SELECT * FROM customers ORDER BY created_at DESC'),
         query('SELECT * FROM invoices ORDER BY created_at DESC'),
         query('SELECT * FROM reversals ORDER BY created_at DESC')
       ]);
@@ -27,7 +27,8 @@ export const bootstrapController = {
           dueDays: settingsRow.due_days ?? 0,
           footerNote: settingsRow.footer_note || 'Thank you for your business.',
           proposalData: settingsRow.proposal_data || {},
-          whatsappSettings: settingsRow.whatsapp_settings || { initialDelay: 2, messageDelay: 3 }
+          whatsappSettings: settingsRow.whatsapp_settings || { initialDelay: 2, messageDelay: 3 },
+          services: settingsRow.services || []
         },
         businesses: businessesRes.rows.map(b => ({
           id: b.id,

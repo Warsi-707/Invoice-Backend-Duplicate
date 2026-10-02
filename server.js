@@ -6,12 +6,6 @@ import dns from 'dns';
 import { initDb } from './config/db.js';
 import apiRoutes from './routes/api.js';
 
-// Use reliable DNS servers for cloud database resolution
-try {
-  dns.setServers(['8.8.8.8', '1.1.1.1', '8.8.4.4']);
-} catch (e) {
-  // ignore
-}
 
 dotenv.config();
 
@@ -57,6 +51,7 @@ app.use((err, req, res, next) => {
 
 import { warmUpPdfEngine } from './services/pdfService.js';
 import { initWhatsApp } from './services/whatsappService.js';
+import { processDueSubscriptions } from './services/subscriptionService.js';
 
 // Start Server
 async function startServer() {
@@ -67,6 +62,16 @@ async function startServer() {
       // Pre-warm browser and WhatsApp in background for 0-delay instant performance
       warmUpPdfEngine();
       initWhatsApp().catch(() => {});
+
+      // Check and process due recurring subscriptions
+      setTimeout(() => {
+        processDueSubscriptions().catch(() => {});
+      }, 5000);
+
+      // Run recurring subscription check every 2 minutes for real-time responsiveness
+      setInterval(() => {
+        processDueSubscriptions().catch(() => {});
+      }, 2 * 60 * 1000);
     });
   } catch (err) {
     console.error('❌ Failed to start server:', err.message);
