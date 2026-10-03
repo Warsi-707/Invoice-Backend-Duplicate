@@ -183,7 +183,7 @@ export const invoiceController = {
   markInvoicePaid: async (req, res, next) => {
     try {
       const { id } = req.params;
-      const { receivedBy = 'Admin' } = req.body;
+      const { receivedBy = 'Admin', method = 'Cash', date } = req.body;
 
       const invRes = await query('SELECT * FROM invoices WHERE id = $1', [id]);
       if (invRes.rows.length === 0) {
@@ -211,8 +211,8 @@ export const invoiceController = {
       const payment = {
         id: `p_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
         amount: balance,
-        method: 'Cash',
-        date: todayStr,
+        method: method || 'Cash',
+        date: date || todayStr,
         time: nowTime,
         receivedBy,
         title: itemTitle,
