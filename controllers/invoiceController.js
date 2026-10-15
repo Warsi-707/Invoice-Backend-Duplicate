@@ -51,7 +51,8 @@ export const invoiceController = {
         month,
         year,
         date,
-        dueDate,
+        dueDate: rawDueDate,
+        due,
         subtotal = 0,
         previousDues = 0,
         previousDuesMonths = '',
@@ -62,6 +63,8 @@ export const invoiceController = {
         milestoneId = null,
         projectId = null
       } = req.body;
+
+      const dueDate = rawDueDate || due || date || '';
 
       if (!businessId || !customerId || total === undefined) {
         return res.status(400).json({ message: 'businessId, customerId and total are required.' });

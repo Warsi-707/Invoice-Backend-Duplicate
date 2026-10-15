@@ -67,7 +67,7 @@ export const businessCustomerController = {
 
       const bName = businessName.trim();
       const cName = customerName.trim();
-      const cleanPhone = (val) => String(val || '').replace(/\D/g, '').slice(0, 11);
+      const cleanPhone = (val) => String(val || '').replace(/\D/g, '').slice(0, 15);
       const bPhone = cleanPhone(phone);
       const bWhatsapp = cleanPhone(whatsapp) || bPhone;
       const bAddress = (businessAddress || '').trim();
@@ -165,7 +165,7 @@ export const businessCustomerController = {
         return res.status(400).json({ message: 'Customer ID and Business ID are required.' });
       }
 
-      const cleanPhone = (val) => String(val || '').replace(/\D/g, '').slice(0, 11);
+      const cleanPhone = (val) => String(val || '').replace(/\D/g, '').slice(0, 15);
       const bPhone = cleanPhone(phone);
       const bWhatsapp = cleanPhone(whatsapp) || bPhone;
       const bAddress = (businessAddress || '').trim();
